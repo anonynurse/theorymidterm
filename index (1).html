@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Nursing Theory Classifier</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* ── Force landscape on mobile ── */
+    @media screen and (pointer: coarse) and (orientation: portrait) {
+      #rotate-msg { display: flex !important; }
+      body > *:not(#rotate-msg) { display: none !important; }
+    }
+
+    #rotate-msg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #020d14;
+      z-index: 9999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      color: #7FDBFF;
+      font-family: 'Share Tech Mono', monospace;
+      text-align: center;
+      padding: 30px;
+    }
+
+    #rotate-msg .rotate-icon {
+      font-size: 3rem;
+      animation: rotateHint 2s ease-in-out infinite;
+    }
+
+    @keyframes rotateHint {
+      0%, 100% { transform: rotate(0deg); }
+      50%       { transform: rotate(90deg); }
+    }
+
+    #rotate-msg p {
+      font-size: 0.8rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #4aa8c8;
+    }
+
+    /* ── Touch device tap styles ── */
+    @media screen and (pointer: coarse) {
+      .drug-pill.tap-selected {
+        background: rgba(127,219,255,0.3) !important;
+        border-color: #7FDBFF !important;
+        box-shadow: 0 0 16px rgba(127,219,255,0.6) !important;
+        transform: scale(1.08);
+      }
+      .sub-pills.tap-target {
+        border-color: #7FDBFF88 !important;
+        background: rgba(127,219,255,0.06) !important;
+      }
+    }
+
+    /* ── Section dividers in the grid ── */
+    .section-divider {
+      grid-column: 1 / -1;
+      border-top: 1px solid #2d6f8e;
+      margin: 4px 0 2px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-divider-label {
+      font-size: 0.56rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #7FDBFF;
+      text-shadow: 0 0 10px #7FDBFF88;
+      white-space: nowrap;
+    }
+    .section-divider-line {
+      flex: 1;
+      height: 1px;
+      background: #2d6f8e;
+    }
+  </style>
+</head>
+<body>
+
+<div id="rotate-msg">
+  <div class="rotate-icon">&#x21BA;</div>
+  <p>Please rotate your device to landscape mode</p>
+</div>
+
+<header>
+  <h1>Nursing Theory Classifier</h1>
+  <div class="subtitle">Benner's Stages &amp; Research Paradigms</div>
+</header>
+
+<div id="error-banner"></div>
+
+<div class="layout">
+  <div class="pool-wrapper">
+    <div class="pool" id="pool"></div>
+    <button id="reset-btn" onclick="initGame()">↺ Reinitialise</button>
+  </div>
+  <div class="grid-wrapper">
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<script>
+// ── Pool section order ─────────────────────────────────────────
+const POOL_SECTION_ORDER = [
+  'Characteristics', 'Knowledge Base', 'Key Focus',
+  'Worldview', 'Description', 'Core Belief',
+];
+
+// ── Section groupings for visual dividers in the grid ──────────
+// Items whose id starts with these prefixes go under a labelled section
+const GRID_SECTIONS = [
+  { label: "Benner's Stages of Nursing Expertise", ids: ['novice','advanced-beginner','competent','proficient','expert'] },
+  { label: "Research Paradigms", ids: ['empiricism','positivism','post-positivism','phenomenology','constructivism','postmodernism'] },
+];
+
+// ── Key helpers ────────────────────────────────────────────────
+function keyToId(key) {
+  return key.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+}
+
+function keyToLabel(key) {
+  return key.replace(/[-_]/g, ' ')
+            .split(' ')
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ');
+}
+
+function subsectionsFor(cat) {
+  return Object.keys(cat)
+    .filter(k => k !== 'id' && k !== 'label')
+    .map(key => ({ id: keyToId(key), label: keyToLabel(key), key }));
+}
+
+// ── State ──────────────────────────────────────────────────────
+let allItems     = [];
+let placedLog    = {};
+let draggingId   = null;
+let selectedPill = null;
+
+const isMobile = () => window.matchMedia('(pointer: coarse)').matches;
+
+// ── Parse JSON ─────────────────────────────────────────────────
+function parseData(categories) {
+  const itemMap = {};
+
+  function addItem(label, hint, typeId, typeKey, poolLabel, catId) {
+    const itemKey = `${label.toLowerCase()}|${typeId}`;
+    const id = itemKey.replace(/[^a-z0-9]/g, '-');
+    if (!itemMap[itemKey]) {
+      itemMap[itemKey] = {
+        id, label, hint,
+        type: typeId,
+        typeKey,
+        poolLabel,
+        correctCats: new Set(),
+        children: [],
+      };
+    }
+    itemMap[itemKey].correctCats.add(catId);
+    return id;
+  }
+
+  categories.forEach(cat => {
+    subsectionsFor(cat).forEach(sub => {
+      const entries = cat[sub.key] || [];
+      entries.forEach(raw => {
+        if (typeof raw === 'string') {
+          const match = raw.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+          const label = match ? match[1].trim() : raw.trim();
+          const hint  = match ? match[2].trim() : null;
+          addItem(label, hint, sub.id, sub.key, sub.label, cat.id);
+        }
+      });
+    });
+  });
+
+  return Object.values(itemMap);
+}
+
+// ── Build category grid ────────────────────────────────────────
+function buildGrid(categories) {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+
+  // Build an ordered list with section dividers
+  const rendered = new Set();
+
+  GRID_SECTIONS.forEach(section => {
+    // Insert divider
+    const divider = document.createElement('div');
+    divider.className = 'section-divider';
+    divider.innerHTML = `<span class="section-divider-label">${section.label}</span><span class="section-divider-line"></span>`;
+    grid.appendChild(divider);
+
+    section.ids.forEach(catId => {
+      const cat = categories.find(c => c.id === catId);
+      if (!cat) return;
+      rendered.add(catId);
+
+      const box = document.createElement('div');
+      box.className = 'category';
+      box.id = 'cat-' + cat.id;
+
+      const subsHtml = subsectionsFor(cat).map(sub => `
+        <div class="subsection">
+          <div class="sub-label">${sub.label}</div>
+          <div class="sub-pills"
+               id="pills-${cat.id}-${sub.id}"
+               data-cat="${cat.id}"
+               data-sub="${sub.id}"></div>
+        </div>
+      `).join('');
+
+      box.innerHTML = `<div class="cat-title">${cat.label}</div>${subsHtml}`;
+      grid.appendChild(box);
+    });
+  });
+
+  // Render any categories not covered by GRID_SECTIONS
+  categories.forEach(cat => {
+    if (rendered.has(cat.id)) return;
+    const box = document.createElement('div');
+    box.className = 'category';
+    box.id = 'cat-' + cat.id;
+
+    const subsHtml = subsectionsFor(cat).map(sub => `
+      <div class="subsection">
+        <div class="sub-label">${sub.label}</div>
+        <div class="sub-pills"
+             id="pills-${cat.id}-${sub.id}"
+             data-cat="${cat.id}"
+             data-sub="${sub.id}"></div>
+      </div>
+    `).join('');
+
+    box.innerHTML = `<div class="cat-title">${cat.label}</div>${subsHtml}`;
+    grid.appendChild(box);
+  });
+
+  attachDropZoneListeners();
+}
+
+function expectedCountForZone(catId, subId) {
+  return allItems.filter(item =>
+    item.correctCats.has(catId) && item.type === subId
+  ).length;
+}
+
+function countPlacedInZone(zone) {
+  return [...zone.children].filter(el => el.classList && el.classList.contains('placed-pill')).length;
+}
+
+function updateZoneCompletionState(zone) {
+  if (!zone) return;
+  const catId = zone.dataset.cat;
+  const subId = zone.dataset.sub;
+  const expected = expectedCountForZone(catId, subId);
+  const placed = countPlacedInZone(zone);
+  zone.classList.toggle('complete', expected > 0 && placed >= expected);
+}
+
+function attachDropZoneListeners() {
+  document.querySelectorAll('.sub-pills').forEach(zone => {
+    if (zone.dataset.listenersAttached) return;
+    zone.dataset.listenersAttached = 'true';
+
+    zone.addEventListener('dragover',  e => { e.preventDefault(); e.stopPropagation(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove('drag-over');
+      handleDrop(zone.dataset.cat, zone.dataset.sub);
+    });
+
+    zone.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!isMobile() || !selectedPill) return;
+      document.querySelectorAll('.sub-pills').forEach(z => z.classList.remove('tap-target'));
+      selectedPill.classList.remove('tap-selected');
+      handleDrop(zone.dataset.cat, zone.dataset.sub);
+      selectedPill = null;
+    });
+  });
+}
+
+// ── Build pool ─────────────────────────────────────────────────
+function buildPool() {
+  const pool = document.getElementById('pool');
+  pool.innerHTML = '';
+  pool.addEventListener('dragover',  e => e.preventDefault());
+  pool.addEventListener('dragenter', e => e.preventDefault());
+
+  const headerDiv = document.createElement('div');
+  headerDiv.className = 'pool-header';
+  headerDiv.textContent = 'Item Pool';
+  pool.appendChild(headerDiv);
+
+  const sectionMap = new Map();
+  allItems.forEach(item => {
+    if (!sectionMap.has(item.poolLabel)) sectionMap.set(item.poolLabel, []);
+    sectionMap.get(item.poolLabel).push(item);
+  });
+
+  const sections = [...sectionMap.entries()].sort(([a], [b]) => {
+    const ai = POOL_SECTION_ORDER.indexOf(a);
+    const bi = POOL_SECTION_ORDER.indexOf(b);
+    return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi);
+  });
+
+  sections.forEach(([label, items]) => {
+    const section = document.createElement('div');
+    section.className = 'pool-section';
+    section.innerHTML = `<div class="pool-section-label">${label}</div>`;
+    const row = document.createElement('div');
+    row.className = 'pool-row';
+    shuffle(items).forEach(item => row.appendChild(makePill(item)));
+    section.appendChild(row);
+    pool.appendChild(section);
+  });
+}
+
+function makePill(item) {
+  const pill = document.createElement('div');
+  pill.className = 'drug-pill';
+  pill.id = 'pill-' + item.id;
+  pill.draggable = true;
+  pill.textContent = item.label;
+
+  if (item.correctCats.size > 1) {
+    const badge = document.createElement('span');
+    badge.className = 'remaining-badge';
+    badge.textContent = item.correctCats.size;
+    pill.appendChild(badge);
+  }
+
+  pill.addEventListener('dragstart', () => { draggingId = item.id; });
+  pill.addEventListener('dragend',   () => draggingId = null);
+
+  pill.addEventListener('click', () => {
+    if (!isMobile()) return;
+    if (selectedPill === pill) {
+      pill.classList.remove('tap-selected');
+      selectedPill = null;
+      return;
+    }
+    if (selectedPill) selectedPill.classList.remove('tap-selected');
+    selectedPill = pill;
+    draggingId = item.id;
+    pill.classList.add('tap-selected');
+    document.querySelectorAll('.sub-pills').forEach(z => z.classList.add('tap-target'));
+  });
+
+  return pill;
+}
+
+// ── Drop logic ─────────────────────────────────────────────────
+function handleDrop(catId, subId) {
+  if (!draggingId) return;
+  const item = allItems.find(i => i.id === draggingId);
+  if (!item) return;
+  const pill = document.getElementById('pill-' + item.id);
+  if (!pill) return;
+
+  const isCorrect = item.correctCats.has(catId) && item.type === subId;
+
+  if (!isCorrect) {
+    shake(pill);
+    if (!isMobile()) { selectedPill = null; draggingId = null; }
+    return;
+  }
+
+  const slotKey = `${catId}|${subId}`;
+  if (placedLog[item.id] && placedLog[item.id].has(slotKey)) return;
+  if (!placedLog[item.id]) placedLog[item.id] = new Set();
+  placedLog[item.id].add(slotKey);
+
+  const placed = document.createElement('span');
+  placed.className = 'placed-pill';
+  placed.dataset.itemId = item.id;
+  placed.dataset.cat = catId;
+  placed.innerHTML = item.hint
+    ? `${item.label} <span class="hint">(${item.hint})</span>`
+    : item.label;
+
+  const zone = document.getElementById(`pills-${catId}-${subId}`);
+  if (zone) {
+    zone.appendChild(placed);
+    updateZoneCompletionState(zone);
+  }
+
+  const remaining = item.correctCats.size - placedLog[item.id].size;
+  if (remaining <= 0) {
+    pill.remove();
+  } else {
+    const badge = pill.querySelector('.remaining-badge');
+    if (badge) badge.textContent = remaining;
+  }
+
+  checkComplete();
+}
+
+function shake(pill) {
+  pill.classList.remove('shake');
+  void pill.offsetWidth;
+  pill.classList.add('shake');
+  setTimeout(() => pill.classList.remove('shake'), 500);
+}
+
+// ── Completion check ───────────────────────────────────────────
+function checkComplete() {
+  if (document.querySelectorAll('#pool .drug-pill').length === 0) {
+    document.getElementById('pool').innerHTML =
+      '<div class="success-msg">All correct</div>';
+    document.getElementById('reset-btn').style.display = 'block';
+    startWinAnimation();
+  }
+}
+
+function startWinAnimation() {
+  document.querySelectorAll('.category').forEach(cat => {
+    cat.style.animationDelay    = (Math.random() * 1.5).toFixed(2) + 's';
+    cat.style.animationDuration = (2.5 + Math.random() * 1.5).toFixed(2) + 's';
+    cat.classList.add('win-flicker');
+  });
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function shuffle(arr) { return [...arr].sort(() => Math.random() - 0.5); }
+
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.innerHTML = msg;
+  el.style.display = 'block';
+}
+
+// ── Init ───────────────────────────────────────────────────────
+async function initGame() {
+  placedLog    = {};
+  draggingId   = null;
+  selectedPill = null;
+  document.getElementById('reset-btn').style.display = 'none';
+  document.getElementById('error-banner').style.display = 'none';
+
+  let categories;
+  try {
+    const res = await fetch('./data.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    categories = await res.json();
+  } catch (err) {
+    showError(
+      `⚠ Could not load <code>data.json</code>.<br>
+      Browsers block local file fetches — run a server instead:<br>
+      <code>npx serve .</code> &nbsp;or&nbsp; <code>python3 -m http.server</code>`
+    );
+    return;
+  }
+
+  allItems = parseData(categories);
+  buildGrid(categories);
+  buildPool();
+  document.querySelectorAll('.sub-pills').forEach(updateZoneCompletionState);
+}
+
+initGame();
+</script>
+</body>
+</html>

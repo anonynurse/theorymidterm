@@ -1,0 +1,83 @@
+{
+  "benner_stages": [
+    {
+      "stage": "Novice",
+      "characteristics": "Limited experience, rely on guidelines/rules",
+      "knowledge_base": "Rules, follow step by step procedures",
+      "key_focus": "Task oriented, limited holistic understanding"
+    },
+    {
+      "stage": "Advanced Beginner",
+      "characteristics": "Some experience, starts pattern recognition",
+      "knowledge_base": "Begins to see connections between action/outcomes",
+      "key_focus": "Rely guidelines – starts to adapt to specific situations"
+    },
+    {
+      "stage": "Competent",
+      "characteristics": "More experience, begins to plan and organize",
+      "knowledge_base": "Sees \"big picture,\" understands patient care contexts",
+      "key_focus": "Prioritizes and manages multiple aspects of care"
+    },
+    {
+      "stage": "Proficient",
+      "characteristics": "Highly experienced, perceives situations as wholes",
+      "knowledge_base": "Unconscious competence, holistic and nuanced understanding",
+      "key_focus": "Responds effortlessly, adapts quickly to complex situations"
+    },
+    {
+      "stage": "Expert",
+      "characteristics": "Extensive experience, intuitive understanding",
+      "knowledge_base": "Unconscious competence, holistic and nuanced understanding",
+      "key_focus": "Responds effortlessly, adapts quickly to complex situations"
+    }
+  ],
+  "paradigms": [
+    {
+      "name": "Empiricism",
+      "description": "Values observation, perception by sense, and verifiable experiences. Relies on instrumentation, reliability, validation.",
+      "core_belief": "The truth is observable",
+      "worldview": "received worldview"
+    },
+    {
+      "name": "Positivism",
+      "description": "Mechanistic, reductionist principles (complex things are reduced to basic components).",
+      "core_beliefs": [
+        "The goal of science is to explain, predict, and control",
+        "Facts can be measured and observed"
+      ],
+      "worldview": "received worldview"
+    },
+    {
+      "name": "Post-positivism",
+      "description": "Focus on rigor and objective inquiry through quantitative methods but recognizes contextual variables",
+      "worldview": "received worldview"
+    },
+    {
+      "name": "Phenomenology",
+      "description": [
+        "The study of phenomena",
+        "Seeks to understand the meaning of human experience",
+        "Knowledge is grounded in human experience; core similarities form the 'essence'"
+      ],
+      "worldview": "perceived worldview"
+    },
+    {
+      "name": "Constructivism",
+      "description": [
+        "Knowledge is subjective and created by individuals",
+        "Multiple interpretations of reality",
+        "Emphasis on subjectivity, multiple truths, trends, patterns, discovery, and understanding"
+      ],
+      "worldview": "perceived worldview"
+    },
+    {
+      "name": "Postmodernism",
+      "description": [
+        "Dominant nursing paradigm currently",
+        "Rejects a single truth (multiple meanings and ways of knowing)",
+        "Knowledge is uncertain, contextual, and relative; changes over time"
+      ],
+      "worldview": "perceived worldview"
+    }
+  ]
+}
